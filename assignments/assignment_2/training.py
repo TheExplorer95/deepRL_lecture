@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import SGD
 
 class DQN_TrainingManager:
-    def __init__(self, agent, batch_size, optimizer=SGD, lr=0.00001, gamma=0.95):
+    def __init__(self, agent, batch_size, optimizer=SGD, lr=0.00001, gamma=0.99):
         self.agent = agent
         self.optimizer = optimizer(learning_rate=lr)
         self.batch_size = batch_size

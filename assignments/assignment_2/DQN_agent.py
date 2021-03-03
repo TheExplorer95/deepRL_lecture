@@ -1,4 +1,5 @@
 import tensorflow as tf
+import gym
 from collections import deque
 import random
 import itertools
@@ -6,18 +7,24 @@ import numpy as np
 from models import DQN
 
 class DQN_Agent:
-    def __init__(self, env, policy, batch_size, buffer_len=100_000):
-        self.env = env
+    def __init__(self, env_str, policy, batch_size, memory_len=100_000, env_seed=0):
+        self.init_env(env_str, env_seed)
+        self.init_delayed_DQN(batch_size=batch_size)
         self.policy = policy()
 
-        self.model = DQN(input_dim=(batch_size, env.observation_space.shape[0]),
-                         output_dim=env.action_space.n)
-        self.target_model = DQN(input_dim=(batch_size, env.observation_space.shape[0]),
-                                output_dim=env.action_space.n)
-        self.target_model.set_weights(self.model.get_weights())
-
         self.avg_steps_episode = []
-        self.memory = deque(maxlen=buffer_len)
+        self.memory = deque(maxlen=memory_len)
+
+    def init_env(self, env_str, env_seed):
+        self.env = gym.make(env_str)
+        self.env.seed(env_seed)
+
+    def init_delayed_DQN(self, batch_size):
+        self.model = DQN(input_dim=(batch_size, self.env.observation_space.shape[0]),
+                         output_dim=self.env.action_space.n)
+        self.target_model = DQN(input_dim=(batch_size, self.env.observation_space.shape[0]),
+                                output_dim=self.env.action_space.n)
+        self.update_target_model_weights()
 
     def sample_from_env(self, episodes=100):
         steps_list = []
@@ -41,13 +48,23 @@ class DQN_Agent:
 
         avg_steps = np.mean(steps_list)
         self.policy.update_epsilon()
+
         return avg_steps
 
     def remember(self, transition):
         self.memory.append(list(itertools.chain(*transition)))
 
-    def update_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
+    def set_target_model_weights(self, model):
+        self.target_model.set_weights(model.get_weights())
+
+    def update_target_model_weights(self):
+        self.target_model.set_weights(self.get_model_weights())
+
+    def get_model_weights(self):
+        return self.model.get_weights()
+
+    def set_model_weights(self, model):
+        self.model.set_weights(model.get_weights)
 
     def get_random_batch(self, batch_size):
         # chooses random indexes of the memory buffer and returns them as
