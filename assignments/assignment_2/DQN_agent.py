@@ -4,15 +4,15 @@ from collections import deque
 import random
 import itertools
 import numpy as np
+from math import ceil
 from models import DQN
 
 class DQN_Agent:
-    def __init__(self, env_str, policy, batch_size, memory_len=100_000, env_seed=0):
+    def __init__(self, env_str, policy, batch_size,  memory_len=100_000, env_seed=0):
         self.init_env(env_str, env_seed)
         self.init_delayed_DQN(batch_size=batch_size)
         self.policy = policy()
-
-        self.avg_steps_episode = []
+        self.memory_len = memory_len
         self.memory = deque(maxlen=memory_len)
 
     def init_env(self, env_str, env_seed):
@@ -26,28 +26,27 @@ class DQN_Agent:
                                 output_dim=self.env.action_space.n)
         self.update_target_model_weights()
 
-    def sample_from_env(self, episodes=100):
+    def sample_from_env(self, avg_steps_last_epoch, min_trajectories=10):
+        trajectories = ceil(min((avg_steps_last_epoch*min_trajectories), self.memory_len))
+
         steps_list = []
-        for episode in range(episodes):
+        for trajectorie in range(trajectories):
             steps = 0
             state = self.env.reset()
             done = False
-            #env.render()
 
-            while not done:  # cap timesteps
+            while not done:
                 action = self.policy.take_action(state.reshape(1, self.env.observation_space.shape[0]),
                                                  self.model)
                 new_state, r, done, _ = self.env.step(action)
                 new_state = new_state
                 self.remember([state, [action], [r], new_state, [int(done)]])
                 state = new_state
-                #env.render()
                 steps += 1
 
             steps_list.append(steps)
 
         avg_steps = np.mean(steps_list)
-        self.policy.update_epsilon()
 
         return avg_steps
 
