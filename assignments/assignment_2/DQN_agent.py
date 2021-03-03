@@ -3,12 +3,19 @@ from collections import deque
 import random
 import itertools
 import numpy as np
+from models import DQN
 
 class DQN_Agent:
     def __init__(self, env, policy, batch_size, buffer_len=100_000):
         self.env = env
-        self.policy = policy
-        self.model = model
+        self.policy = policy()
+
+        self.model = DQN(input_dim=(batch_size, env.observation_space.shape[0]),
+                         output_dim=env.action_space.n)
+        self.target_model = DQN(input_dim=(batch_size, env.observation_space.shape[0]),
+                                output_dim=env.action_space.n)
+        self.target_model.set_weights(self.model.get_weights())
+
         self.avg_steps_episode = []
         self.memory = deque(maxlen=buffer_len)
 
@@ -21,10 +28,11 @@ class DQN_Agent:
             #env.render()
 
             while not done:  # cap timesteps
-                action = self.policy.take_action(state.reshape(1, self.env.observation_space.shape[0]))
+                action = self.policy.take_action(state.reshape(1, self.env.observation_space.shape[0]),
+                                                 self.model)
                 new_state, r, done, _ = self.env.step(action)
                 new_state = new_state
-                self.remember([state, [action], [r], new_state])
+                self.remember([state, [action], [r], new_state, [int(done)]])
                 state = new_state
                 #env.render()
                 steps += 1
@@ -35,12 +43,15 @@ class DQN_Agent:
         self.policy.update_epsilon()
         return avg_steps
 
-    def remember(self, step):
-        self.memory.append(list(itertools.chain(*step)))
+    def remember(self, transition):
+        self.memory.append(list(itertools.chain(*transition)))
+
+    def update_target_model(self):
+        self.target_model.set_weights(self.model.get_weights())
 
     def get_random_batch(self, batch_size):
         # chooses random indexes of the memory buffer and returns them as
-        # tf.Tensor
+        # tf.Tensor (weird way to reduce computations)
 
         idx_batch = set(random.sample(range(len(self.memory)), batch_size))
         batch = [val for i, val in enumerate(self.memory) if i in idx_batch]

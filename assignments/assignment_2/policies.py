@@ -2,15 +2,14 @@ import numpy as np
 import tensorflow as tf
 
 class Epsilon_Greedy:
-    def __init__(self, model, epsilon=0.9, epsilon_min=0.01, decay_factor=.996):
-        self.model = model
+    def __init__(self, epsilon=1, epsilon_min=0.01, decay_factor=.996):
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.decay_factor = decay_factor
 
-    def take_action(self, state):
+    def take_action(self, state, model):
         p = np.random.uniform()
-        q_values = self.model(tf.constant(state)).numpy()
+        q_values = model(tf.constant(state)).numpy()
         q_values = np.squeeze(q_values)
 
         if p <= 1-self.epsilon:
