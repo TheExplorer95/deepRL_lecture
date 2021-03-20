@@ -9,10 +9,12 @@ from models import DQN, TDadvActor, TDadvCritic
 @ray.remote
 class A2C_Agent:
     def __init__(self, ID, env_str, batch_size, actor_class, actor_weights,
-                    decay_factor=.996, env_seed=0):
+                 env_seed=0, expl_factor=1., expl_decay=.991):
         self.init_env(env_str, env_seed)
         self.clone_main_model(actor_class, actor_weights, batch_size)
         self.ID = ID
+        self.expl_factor = expl_factor
+        self.expl_decay = expl_decay
         self.memory = []
         self.avg_steps = []
         self.cum_reward = []
@@ -50,9 +52,9 @@ class A2C_Agent:
             done = False
 
             while not done and steps <= max_steps-1:
-                #self.env.render()
-                action = self.actor(state.reshape(1, self.env.observation_space.shape[0]))
-                action = action.numpy()[0]
+                # self.env.render()
+                action = self.actor(state.reshape(1, self.env.observation_space.shape[0])).numpy()[0]
+                action += np.random.uniform(low=-self.expl_factor, high=self.expl_factor)
                 new_state, r, done, _ = self.env.step(action)
                 self.remember([state, action, [r], new_state, [int(done)]])
                 state = new_state
@@ -64,6 +66,8 @@ class A2C_Agent:
         self.avg_steps.append(np.mean(steps_list))
         self.cum_reward.append(np.mean(cum_reward_list))
 
+        self.update_expl_factor()
+
         return self.ID
 
     def remember(self, transition):
@@ -73,6 +77,9 @@ class A2C_Agent:
         memory = self.memory.copy()
         self.memory.clear()
         return memory
+
+    def update_expl_factor(self):
+        self.expl_factor *= self.expl_decay
 
     def get_cum_reward(self):
         cum_reward = self.cum_reward.copy()

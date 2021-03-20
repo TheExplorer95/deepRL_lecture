@@ -15,8 +15,9 @@ from psutil import cpu_count
 from models import DQN, TDadvActor, TDadvCritic
 
 class TrainingManagerTDa2c:
-    def __init__(self, agent, sample_factor=10, max_steps=200, cpu_cores=1, batch_size=128,
-                 env_str='MountainCarContinuous-v0', optimizer=SGD, lr=0.00001, gamma=0.95):
+    def __init__(self, agent, update_delay, sample_factor=10, max_steps=200, cpu_cores=8, batch_size=128,
+                 env_str='MountainCarContinuous-v0', optimizer=SGD, lr=0.00001, gamma=0.95,
+                 expl_factor=1):
 
         if cpu_cores is None:
             self.cpu_cores = cpu_count()
@@ -24,6 +25,8 @@ class TrainingManagerTDa2c:
             self.cpu_cores = cpu_cores
 
         self.max_steps = max_steps
+        self.update_policy = True
+        self.update_delay = update_delay
 
         self.ER_memory = ER_Memory(batch_size=batch_size)
         self.sample_factor = sample_factor
@@ -36,7 +39,7 @@ class TrainingManagerTDa2c:
         self.get_env_dimensions(env_str, batch_size)
         self.init_Networks(self.model_input_dim, self.model_output_dim)
 
-        self.agents = [agent.remote(ID, env_str, batch_size, TDadvActor, self.actor.get_weights()) for ID in range(self.cpu_cores)]
+        self.agents = [agent.remote(ID, env_str, batch_size, TDadvActor, self.actor.get_weights(), expl_factor=expl_factor) for ID in range(self.cpu_cores)]
 
         # statistics
         self.avg_steps_per_epoch = []
@@ -97,8 +100,8 @@ class TrainingManagerTDa2c:
             return self.max_steps
 
     def calc_amount_trajectories_per_agent(self):
-        trajectories = ceil(self.batch_size * self.sample_factor / self.get_prev_avg_steps() / self.cpu_cores)
-        trajectories = max(trajectories, self.cpu_cores * 5)
+        trajectories = ceil((self.update_delay*self.batch_size / self.cpu_cores) / self.get_prev_avg_steps())
+        # trajectories = max(trajectories, )
         return trajectories
 
     def start_sampling(self):
@@ -129,16 +132,20 @@ class TrainingManagerTDa2c:
         td_target_critic = tf.add(reward, tf.multiply(done, tf.cast(tf.multiply(self.gamma, self.target_critic(suc_state)), tf.float32)))
         td_target_actor = tf.add(reward, tf.multiply(done, tf.cast(tf.multiply(self.gamma, self.critic(suc_state)), tf.float32)))
 
-        # advantage
-        # A = r + gamma* V(suc_state) - V(state)
-        advantage = td_target_actor - self.critic(state)
+        if self.update_policy:
+            # advantage
+            # A = r + gamma* V(suc_state) - V(state)
+            advantage = td_target_actor - self.critic(state)
 
-        # breakpoint()
-        with tf.GradientTape() as tape:
-            loss_actor = tf.reduce_sum(tf.math.subtract(tf.constant(0.0), self.actor(state, prob=True).log_prob(action)) * tf.stop_gradient(advantage))
-            loss_act_reg = tf.add(loss_actor, tf.reduce_sum(self.actor.losses))
-        gradients = tape.gradient(loss_act_reg, self.actor.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
+            with tf.GradientTape() as tape:
+                loss_actor = tf.reduce_sum(tf.math.subtract(tf.constant(0.0), self.actor(state, prob=True).log_prob(action)) * tf.stop_gradient(advantage))
+                loss_act_reg = tf.add(loss_actor, tf.reduce_sum(self.actor.losses))
+            gradients = tape.gradient(loss_act_reg, self.actor.trainable_variables)
+            self.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
+
+            self.update_policy = False
+        else:
+            self.update_policy = True
 
         with tf.GradientTape() as tape:
             loss_critic = tf.reduce_sum(tf.square(tf.math.subtract(self.critic(state), tf.stop_gradient(td_target_critic))))
@@ -147,8 +154,10 @@ class TrainingManagerTDa2c:
         self.optimizer.apply_gradients(zip(gradients, self.critic.trainable_variables))
 
         self.critic_loss_metric.update_state(loss_critic)
-        self.actor_loss_metric.update_state(abs(loss_actor))
-
+        try:
+            self.actor_loss_metric.update_state(abs(loss_actor))
+        except:
+            pass
 
 class ER_Memory:
     def __init__(self, batch_size, memory_len=100_000):

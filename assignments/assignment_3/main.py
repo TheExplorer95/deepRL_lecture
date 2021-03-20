@@ -1,5 +1,4 @@
 from ray_multiprocessing import A2C_Agent
-from policies import Epsilon_Greedy
 from training import TrainingManagerTDa2c
 from analysis import Experiment_Manager
 
@@ -9,11 +8,12 @@ import ray
 NUM_REPETETIONS = 1
 EPOCHS = 2_500
 DELAY = 7
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 LR = 0.000_01
-MAX_STEPS = 400
+MAX_STEPS = 800
+EXPL_FACTOR = 1.5
 
-def main():
+if __name__ == '__main__':
     for repetition in range(NUM_REPETETIONS):
         ray.init()
         now = datetime.now()
@@ -24,7 +24,9 @@ def main():
         training_manager = TrainingManagerTDa2c(agent=A2C_Agent,
                                            batch_size=BATCH_SIZE,
                                            lr=LR,
-                                           max_steps=MAX_STEPS)
+                                           max_steps=MAX_STEPS,
+                                           expl_factor=EXPL_FACTOR,
+                                           update_delay=DELAY)
 
         for epoch in range(EPOCHS):
             training_manager.timer.start()
@@ -50,12 +52,3 @@ def main():
                 exp_manager.plot_critic_loss(training_manager.critic_loss_per_epoch)
                 exp_manager.plot_cum_sum(training_manager.cum_reward_per_epoch)
                 break
-
-if __name__ == '__main__':
-    try:
-        main()
-    except KeyboardInterrupt:
-        exp_manager.plot_steps(training_manager.avg_steps_per_epoch)
-        exp_manager.plot_actor_loss(training_manager.actor_loss_per_epoch)
-        exp_manager.plot_critic_loss(training_manager.critic_loss_per_epoch)
-        exp_manager.plot_cum_sum(training_manager.cum_reward_per_epoch)
