@@ -6,10 +6,10 @@ from models import DQN
 
 @ray.remote
 class DQN_Agent_Actor:
-    def __init__(self, ID, env_str, policy, batch_size, model_weights, env_seed=0):
+    def __init__(self, ID, env_str, policy, batch_size, model_weights, decay_factor=.996, env_seed=0):
         self.init_env(env_str, env_seed)
         self.clone_main_model(DQN, model_weights, batch_size)
-        self.policy = policy()
+        self.policy = policy(decay_factor=decay_factor)
         self.ID = ID
         self.memory = []
         self.avg_steps = []

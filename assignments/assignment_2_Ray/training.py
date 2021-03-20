@@ -14,8 +14,8 @@ from psutil import cpu_count
 from models import DQN
 
 class TrainingManager:
-    def __init__(self, agent, policy, samples_per_epoch=10_000, cpu_cores=None, batch_size=128,
-                 env_str='CartPole-v0', optimizer=SGD, lr=0.00001, gamma=0.99):
+    def __init__(self, agent, policy, samples_per_epoch=1_000, cpu_cores=None, batch_size=128,
+                 env_str='CartPole-v0', optimizer=SGD, lr=0.00001, gamma=0.99, decay_factor=.996):
 
         if cpu_cores is None:
             self.cpu_cores = cpu_count()
@@ -30,7 +30,7 @@ class TrainingManager:
         self.init_model_dimensions(env_str, batch_size)
         self.init_delayed_DQN(self.model_input_dim, self.model_output_dim)
 
-        self.ER_memory = ER_Memory(batch_size)
+        self.ER_memory = ER_Memory(batch_size, memory_len=10_000)
         self.agents = [agent.remote(ID, env_str, policy, batch_size, self.model.get_weights()) for ID in range(self.cpu_cores)]
         self.samples_per_epoch = samples_per_epoch
 
@@ -61,6 +61,13 @@ class TrainingManager:
 
     def get_model_weights(self):
         return self.model.get_weights()
+
+    def save_model(self, path, epoch, model_name="model"):
+        time_stamp = datetime.now().strftime("%d-%m-%Y_%I-%M-%S_%p")
+        full_path = f"{path}/{model_name}_{epoch}_{time_stamp}"
+        agent = self.get_agent()
+        print("saving model...")
+        agent.model.save(full_path)
 
     def update_agents(self):
         futures = [agent.set_model_weights.remote(self.model.get_weights()) for agent in self.agents]
@@ -96,16 +103,17 @@ class TrainingManager:
         suc_state = tf.reshape(batch[:, 6:10], [self.batch_size, -1])
         q_suc_state = self.target_model(suc_state)
         q_max_suc_state = tf.reduce_max(q_suc_state, axis=-1, keepdims=True)
-        reward = tf.cast(tf.reshape(batch[:, 5], [self.batch_size, -1]), tf.float32)
 
+        reward = tf.cast(tf.reshape(batch[:, 5], [self.batch_size, -1]), tf.float32)
         done = tf.subtract(tf.constant(1.0), tf.cast(tf.reshape(batch[:, 10], [self.batch_size, -1]), tf.float32))
+
         q_target = tf.add(reward, tf.multiply(done, tf.cast(tf.multiply(self.gamma, q_max_suc_state), tf.float32)))
 
         state = tf.reshape(batch[:, 0:4], [self.batch_size, -1])
-        actions = tf.cast(tf.reshape(batch[:, 4], [self.batch_size, -1]), tf.int32)
+        action = tf.cast(tf.reshape(batch[:, 4], [self.batch_size, -1]), tf.int32)
 
         with tf.GradientTape() as tape:
-            prediction = tf.gather(self.model(state), actions, batch_dims=1)
+            prediction = tf.gather(self.model(state), action, batch_dims=1)
             loss = tf.reduce_mean(tf.square(prediction - tf.stop_gradient(q_target)))
             loss_reg = tf.add(loss, tf.reduce_sum(self.model.losses))
 
@@ -142,7 +150,6 @@ class Timer():
         if self._start_time is not None:
             print(f"Timer is running. Use .stop() to stop it")
             return None
-
         self._start_time = time.perf_counter()
 
     def stop(self):
@@ -150,7 +157,6 @@ class Timer():
         if self._start_time is None:
             print(f"Timer is not running. Use .start() to start it")
             return 0
-
         elapsed_time = time.perf_counter() - self._start_time
         self._start_time = None
         return elapsed_time

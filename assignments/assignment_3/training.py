@@ -124,33 +124,30 @@ class TrainingManagerTDa2c:
         done = tf.subtract(tf.constant(1.0), tf.cast(tf.reshape(batch[:, 6], [self.batch_size, -1]), tf.float32))
         suc_state = tf.reshape(batch[:, 4:6], [self.batch_size, -1])
 
-        # V of next state
-        q_state = self.target_critic(state)
-        q_suc_state = self.target_critic(suc_state)
-
         # TD-target
         # target = r + gamma * V(suc_state)
-        td_target = tf.add(reward, tf.multiply(done, tf.cast(tf.multiply(self.gamma, q_suc_state), tf.float32)))
+        td_target_critic = tf.add(reward, tf.multiply(done, tf.cast(tf.multiply(self.gamma, self.target_critic(suc_state)), tf.float32)))
+        td_target_actor = tf.add(reward, tf.multiply(done, tf.cast(tf.multiply(self.gamma, self.critic(suc_state)), tf.float32)))
 
-        # TD_error
-        # td_error = target - V(state)
-        td_error = td_target - q_state
+        # advantage
+        # A = r + gamma* V(suc_state) - V(state)
+        advantage = td_target_actor - self.critic(state)
 
         # breakpoint()
         with tf.GradientTape() as tape:
-            loss_actor = tf.math.subtract(tf.constant(0.0),  tf.reduce_sum(self.actor(state, prob=True).log_prob(action) * tf.stop_gradient(td_error)))
+            loss_actor = tf.reduce_sum(tf.math.subtract(tf.constant(0.0), self.actor(state, prob=True).log_prob(action)) * tf.stop_gradient(advantage))
             loss_act_reg = tf.add(loss_actor, tf.reduce_sum(self.actor.losses))
         gradients = tape.gradient(loss_act_reg, self.actor.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
 
         with tf.GradientTape() as tape:
-            loss_critic = tf.reduce_sum(tf.square(tf.math.subtract(self.critic(state), tf.stop_gradient(td_target))))
+            loss_critic = tf.reduce_sum(tf.square(tf.math.subtract(self.critic(state), tf.stop_gradient(td_target_critic))))
             loss_crit_reg = tf.add(loss_critic, tf.reduce_sum(self.critic.losses))
         gradients = tape.gradient(loss_crit_reg, self.critic.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.critic.trainable_variables))
 
         self.critic_loss_metric.update_state(loss_critic)
-        self.actor_loss_metric.update_state(loss_actor)
+        self.actor_loss_metric.update_state(abs(loss_actor))
 
 
 class ER_Memory:

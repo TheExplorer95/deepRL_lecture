@@ -3,7 +3,6 @@ import gym
 import itertools
 import numpy as np
 import sklearn
-import sklearn.preprocessing
 from models import DQN, TDadvActor, TDadvCritic
 
 
@@ -12,7 +11,6 @@ class A2C_Agent:
     def __init__(self, ID, env_str, batch_size, actor_class, actor_weights,
                     decay_factor=.996, env_seed=0):
         self.init_env(env_str, env_seed)
-        self.init_state_scaler()
         self.clone_main_model(actor_class, actor_weights, batch_size)
         self.ID = ID
         self.memory = []
@@ -33,11 +31,6 @@ class A2C_Agent:
 
         return state
 
-    def init_state_scaler(self):
-        state_space_samples = np.array([self.env.observation_space.sample() for x in range(10000)])
-        self.state_scaler = sklearn.preprocessing.StandardScaler()
-        self.state_scaler.fit(state_space_samples)
-
     def clone_main_model(self, actor_class, actor_weights, batch_size):
         self.actor = TDadvActor(input_dim=(batch_size, self.env.observation_space.shape[0]),
                                 output_dim=self.env.action_space.shape[0],
@@ -56,12 +49,11 @@ class A2C_Agent:
             state = self.env.reset()
             done = False
 
-            while not done and steps <= max_steps:
+            while not done and steps <= max_steps-1:
                 #self.env.render()
                 action = self.actor(state.reshape(1, self.env.observation_space.shape[0]))
                 action = action.numpy()[0]
                 new_state, r, done, _ = self.env.step(action)
-                # new_state = self.scale_state(state)
                 self.remember([state, action, [r], new_state, [int(done)]])
                 state = new_state
                 steps += 1

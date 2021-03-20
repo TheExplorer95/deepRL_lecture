@@ -1,19 +1,19 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Dense, Activation, Dropout
+from tensorflow.keras.layers import Dense, Activation, Dropout, BatchNormalization
 from tensorflow.keras.activations import tanh, relu
-from tensorflow.keras.regularizers import l1
+from tensorflow.keras.regularizers import l1, l2
 
 class DQN(tf.keras.Model):
-    def __init__(self, input_dim, output_dim, act_fct=tanh):
+    def __init__(self, input_dim, output_dim, act_fct=tanh, reg=l2):
         super(DQN, self).__init__()
 
         self.layer = [
-                Dense(128, input_dim=input_dim, kernel_regularizer=l1()),
+                Dense(128, input_dim=input_dim, kernel_regularizer=reg()),
+                BatchNormalization(),
                 Activation(act_fct),
-                Dropout(.2),
-                Dense(64, kernel_regularizer=l1()),
+                Dense(64, kernel_regularizer=reg()),
+                BatchNormalization(),
                 Activation(act_fct),
-                Dropout(.2),
                 Dense(output_dim, use_bias=False)
         ]
 
