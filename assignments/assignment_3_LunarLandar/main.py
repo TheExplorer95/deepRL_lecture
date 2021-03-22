@@ -1,7 +1,7 @@
 from ray_multiprocessing import A2C_Agent
 from training import TrainingManagerTDa2c
 from analysis import Experiment_Manager
-
+import numpy as np
 from datetime import datetime
 import ray
 import tensorflow as tf
@@ -18,7 +18,7 @@ DELAY = 7
 BATCH_SIZE = 64
 LR = 0.000_01
 MAX_STEPS = 9999
-EXPL_FACTOR = 3.4
+EXPL_FACTOR = 0.001
 
 if __name__ == '__main__':
     for repetition in range(NUM_REPETETIONS):
@@ -65,7 +65,7 @@ if __name__ == '__main__':
                     exp_manager.plot_cum_sum(training_manager.cum_reward_per_epoch)
                     flag = True
                     break
-                elif training_manager.actor_loss_per_epoch[-1] > 500:
+                elif training_manager.actor_loss_per_epoch[-1] > 400 or np.isnan(training_manager.actor_loss_per_epoch[-1] > 400):
                     ray.shutdown()
                     flag = False
                     break

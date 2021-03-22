@@ -9,7 +9,7 @@ from models import DQN, TDadvActor, TDadvCritic
 @ray.remote
 class A2C_Agent:
     def __init__(self, ID, env_str, batch_size, actor_class, actor_weights,
-                 env_seed=0, expl_factor=1., expl_decay=.998, epsilon=0.9):
+                 env_seed=0, expl_factor=1., expl_decay=.998, epsilon=0.1):
         self.init_env(env_str, env_seed)
         self.clone_main_model(actor_class, actor_weights, batch_size)
         self.ID = ID
@@ -54,9 +54,8 @@ class A2C_Agent:
             done = False
 
             while not done and steps <= max_steps-1:
-                self.env.render()
                 action = self.actor(state.reshape(1, self.env.observation_space.shape[0])).numpy()[0]
-                action = (1-self.epsilon) * action + self.epsilon * np.random.uniform(low=-self.expl_factor, high=self.expl_factor)
+                # action = (1-self.epsilon) * action + self.epsilon * np.random.uniform(low=-self.expl_factor, high=self.expl_factor)
                 new_state, r, done, _ = self.env.step(action)
                 self.remember([state, action, [r], new_state, [int(done)]])
                 state = new_state

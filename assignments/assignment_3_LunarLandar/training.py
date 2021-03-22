@@ -16,7 +16,7 @@ from models import DQN, TDadvActor, TDadvCritic
 
 class TrainingManagerTDa2c:
     def __init__(self, agent, update_delay, max_steps=200, cpu_cores=4, batch_size=128,
-                 env_str='MountainCarContinuous-v0', optimizer=SGD, lr=0.00001, gamma=0.95,
+                 env_str='LunarLanderContinuous-v2', optimizer=SGD, lr=0.00001, gamma=0.95,
                  expl_factor=1):
 
         if cpu_cores is None:
@@ -118,11 +118,12 @@ class TrainingManagerTDa2c:
     # @tf.function
     def update_models(self, batch):
         # for a state space with dim 4
-        state = tf.reshape(batch[:, 0:2], [self.batch_size, -1])
-        action = tf.cast(tf.reshape(batch[:, 2], [self.batch_size, -1]), tf.float32)
-        reward = tf.cast(tf.reshape(batch[:, 3], [self.batch_size, -1]), tf.float32)
-        done = tf.subtract(tf.constant(1.0), tf.cast(tf.reshape(batch[:, 6], [self.batch_size, -1]), tf.float32))
-        suc_state = tf.reshape(batch[:, 4:6], [self.batch_size, -1])
+
+        state = tf.reshape(batch[:, 0:8], [self.batch_size, -1])
+        action = tf.cast(tf.reshape(batch[:, 8:10], [self.batch_size, -1]), tf.float32)
+        reward = tf.cast(tf.reshape(batch[:, 10], [self.batch_size, -1]), tf.float32)
+        done = tf.subtract(tf.constant(1.0), tf.cast(tf.reshape(batch[:, 19], [self.batch_size, -1]), tf.float32))
+        suc_state = tf.reshape(batch[:, 11:19], [self.batch_size, -1])
 
         # TD-target
         # target = r + gamma * V(suc_state)
