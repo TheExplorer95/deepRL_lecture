@@ -12,8 +12,8 @@
 - LunarLander solved? space ship learns to fly stable, but besides landing attempts it sometimes just hovers in the air (example assignment_3_LunarLandar/results/20210323-121215-polAdvantage-MaxStep250-ExplRange0.05-BatchSize128_Delay7_lr1e-07_L2reg)
 - results: cumulative reward, avg_steps, actor loss, critic loss, model of the trained network
 
-\textbf{Sadly} I wasn't able to make a fancy preview with the trained networks, but plots should be sufficient, if not please contact me.
+**Unfortunately** I wasn't able to make a fancy preview with the trained networks (started though), but plots should be sufficient, if not please contact me and I'll finish it up.
 
-To \textbf{run the code}, install env from the respective Assignment (should be more or less the same) and run: 'python main.py' from the assignent folder
+To **run the code**, install env from the respective Assignment (should be more or less the same) and run: 'python main.py' from the assignent folder
 
 
