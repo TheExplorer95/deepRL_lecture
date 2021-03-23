@@ -4,22 +4,22 @@ import itertools
 import numpy as np
 import sklearn
 from models import DQN, TDadvActor, TDadvCritic
-
+import time
 
 @ray.remote
 class A2C_Agent:
     def __init__(self, ID, env_str, batch_size, actor_class, actor_weights,
-                 env_seed=0, expl_factor=1., expl_decay=.998, epsilon=0.1):
+                 env_seed=0, expl_factor=1., epsilon=1, exp_dec=0.995):
         self.init_env(env_str, env_seed)
         self.clone_main_model(actor_class, actor_weights, batch_size)
         self.ID = ID
         self.expl_factor = expl_factor
-        self.expl_decay = expl_decay
         self.memory = []
         self.avg_steps = []
         self.cum_reward = []
         self.epsilon = epsilon
         self.counter = 0
+        self.exp_dec = exp_dec
 
     def init_env(self, env_str, env_seed):
         self.env = gym.make(env_str)
@@ -44,7 +44,7 @@ class A2C_Agent:
         self.actor(np.ones(batch_size*self.env.observation_space.shape[0]).reshape((batch_size, self.env.observation_space.shape[0])))
         self.actor.set_weights(actor_weights)
 
-    def sample_from_env(self, trajectories, max_steps):
+    def sample_from_env(self, trajectories, max_steps, render=False):
         steps_list = []
         cum_reward_list = []
         for trajectorie in range(trajectories):
@@ -55,17 +55,30 @@ class A2C_Agent:
 
             while not done and steps <= max_steps-1:
                 action = self.actor(state.reshape(1, self.env.observation_space.shape[0])).numpy()[0]
-                # action = (1-self.epsilon) * action + self.epsilon * np.random.uniform(low=-self.expl_factor, high=self.expl_factor)
+
+                if render:
+                    self.env.render()
+                    time.sleep(0.015)
+                elif steps%5 == 0:
+                    action[0] = action[0] + self.epsilon * np.random.uniform(low=-self.expl_factor*2, high=self.expl_factor)
+                    action[1] = action[1] + self.epsilon * np.random.uniform(low=-self.expl_factor, high=self.expl_factor)
+
+                # assert not np.isnan(action)
+                # if np.isnan(action):
+                #     raise Exception()
                 new_state, r, done, _ = self.env.step(action)
-                self.remember([state, action, [r], new_state, [int(done)]])
+                if not render:
+                    self.remember([state, action, [r], new_state, [int(done)]])
                 state = new_state
                 steps += 1
                 cum_reward += r
 
-            steps_list.append(steps)
-            cum_reward_list.append(cum_reward)
-        self.avg_steps.append(np.mean(steps_list))
-        self.cum_reward.append(np.mean(cum_reward_list))
+            if not render:
+                steps_list.append(steps)
+                cum_reward_list.append(cum_reward)
+        if not render:
+            self.avg_steps.append(np.mean(steps_list))
+            self.cum_reward.append(np.mean(cum_reward_list))
 
         self.update_epsilon()
 
@@ -80,19 +93,20 @@ class A2C_Agent:
         return memory
 
     def update_epsilon(self):
-        #self.epsilon *= self.expl_decay
-        self.counter +=1
+        # self.counter +=1
+        #
+        # if self.counter > 30:
+        #     self.epsilon =  0.7#0.8
+        # elif self.counter > 60:
+        #     self.epsilon =  0.3
+        # elif self.counter > 125:
+        #     self.epsilon =  0.2#0.3
+        # elif self.counter > 200:
+        #     self.epsilon =  0.1
+        # elif self.counter > 250:
+        #     self.epsilon =  0.
 
-        if self.counter > 200:
-            self.epsilon =  0.8
-        elif self.counter > 300:
-            self.epsilon =  0.5
-        elif self.counter > 350:
-            self.epsilon =  0.3
-        elif self.counter > 450:
-            self.epsilon =  0.1
-        elif self.counter > 500:
-            self.epsilon =  0.
+        self.epsilon *= self.exp_dec
 
     def get_cum_reward(self):
         cum_reward = self.cum_reward.copy()

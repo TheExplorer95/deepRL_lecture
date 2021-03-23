@@ -5,7 +5,7 @@ from tensorflow.keras.activations import tanh, relu, softmax, elu
 from tensorflow.keras.regularizers import l1, l2
 
 class TDadvActor(tf.keras.Model):
-    def __init__(self, input_dim, output_dim, act_low, act_high, act_fct=elu, out_fct=tanh, reg=l2):
+    def __init__(self, input_dim, output_dim, act_low, act_high, act_fct=tanh, out_fct=tanh, reg=l2):
         super(TDadvActor, self).__init__()
         self.act_low = act_low
         self.act_high = act_high
@@ -17,11 +17,17 @@ class TDadvActor(tf.keras.Model):
                 Dense(32, kernel_regularizer=reg()),
                 BatchNormalization(),
                 Activation(act_fct),
+                Dense(16, kernel_regularizer=reg()),
+                BatchNormalization(),
+                Activation(act_fct),
+                Dense(8, kernel_regularizer=reg()),
+                BatchNormalization(),
+                Activation(act_fct),
         ]
 
-        self.mu = Dense(output_dim)
+        self.mu = Dense(output_dim, kernel_regularizer=reg(), use_bias=False)
 
-        self.sigma = Dense(output_dim)
+        self.sigma = Dense(output_dim, kernel_regularizer=reg(), use_bias=False)
 
 
     # @tf.function
@@ -59,6 +65,12 @@ class TDadvCritic(tf.keras.Model):
                 BatchNormalization(),
                 Activation(act_fct),
                 Dense(32, kernel_regularizer=reg()),
+                BatchNormalization(),
+                Activation(act_fct),
+                Dense(16, kernel_regularizer=reg()),
+                BatchNormalization(),
+                Activation(act_fct),
+                Dense(8, kernel_regularizer=reg()),
                 BatchNormalization(),
                 Activation(act_fct),
                 Dense(output_dim, use_bias=False)

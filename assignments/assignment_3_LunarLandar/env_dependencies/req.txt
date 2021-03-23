@@ -11,7 +11,6 @@ astunparse=1.6.3=pypi_0
 async-generator=1.10=pypi_0
 async-timeout=3.0.1=pypi_0
 attrs=20.3.0=pypi_0
-backcall=0.2.0=pypi_0
 bleach=3.2.1=pypi_0
 blessings=1.7=pypi_0
 bokeh=2.2.3=pypi_0

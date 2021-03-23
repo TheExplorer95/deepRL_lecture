@@ -3,10 +3,11 @@ import random
 import ray
 import time
 import tensorflow as tf
+import os
 
 from collections import deque
 from math import ceil
-from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow import constant
 import numpy as np
 from numpy import mean
@@ -15,8 +16,8 @@ from psutil import cpu_count
 from models import DQN, TDadvActor, TDadvCritic
 
 class TrainingManagerTDa2c:
-    def __init__(self, agent, update_delay, max_steps=200, cpu_cores=4, batch_size=128,
-                 env_str='LunarLanderContinuous-v2', optimizer=SGD, lr=0.00001, gamma=0.95,
+    def __init__(self, agent, update_delay, result_folder, max_steps=200, cpu_cores=4, batch_size=128,
+                 env_str='LunarLanderContinuous-v2', optimizer=SGD, lr=0.00001, gamma=0.99,
                  expl_factor=1):
 
         if cpu_cores is None:
@@ -78,13 +79,6 @@ class TrainingManagerTDa2c:
     def get_critic_weights(self):
         return self.critic.get_weights()
 
-    def save_model(self, path, epoch, model_name="model"):
-        time_stamp = datetime.now().strftime("%d-%m-%Y_%I-%M-%S_%p")
-        full_path = f"{path}/{model_name}_{epoch}_{time_stamp}"
-        agent = self.get_agent()
-        print("saving model...")
-        agent.critic.save(full_path)
-
     def update_agents(self):
         futures = [agent.set_actor_weights.remote(self.actor.get_weights()) for agent in self.agents]
         while futures:
@@ -94,12 +88,16 @@ class TrainingManagerTDa2c:
         try:
             return self.avg_steps_per_epoch[-1]
         except IndexError:
-            return self.max_steps
+            return 50
 
     def calc_amount_trajectories_per_agent(self):
         trajectories = ceil((self.update_delay*self.batch_size / self.cpu_cores) / self.get_prev_avg_steps())
-        trajectories = max(trajectories, 2)
+        # if self.get_prev_avg_steps() < 150:
+        #     trajectories = max(trajectories, ceil((self.update_delay*self.batch_size / self.cpu_cores) / 150))
         return trajectories
+
+    def render(self):
+        agent_ID = ray.get(self.agents[0].sample_from_env.remote(1, self.max_steps, render=True))
 
     def start_sampling(self):
         amount_trajectories = self.calc_amount_trajectories_per_agent()
@@ -108,6 +106,14 @@ class TrainingManagerTDa2c:
         while futures:
             agent_IDs, futures = ray.wait(futures)
             self.ER_memory.remember(ray.get(self.agents[ray.get(agent_IDs[0])].get_memory.remote()))
+
+    def save_models(self, repetition, result_folder):
+        try:
+            self.actor.save_weights('results/' + result_folder + f'/actor_model_rep{repetition}.h5')
+            self.critic.save_weights('results/' + result_folder + f'/critic_model_rep{repetition}.h5')
+        except:
+            breakpoint()
+            pass
 
     def update_stats(self):
         self.avg_steps_per_epoch.append(mean([ray.get(agent.get_avg_steps.remote()) for agent in self.agents]))
@@ -122,13 +128,13 @@ class TrainingManagerTDa2c:
         state = tf.reshape(batch[:, 0:8], [self.batch_size, -1])
         action = tf.cast(tf.reshape(batch[:, 8:10], [self.batch_size, -1]), tf.float32)
         reward = tf.cast(tf.reshape(batch[:, 10], [self.batch_size, -1]), tf.float32)
-        done = tf.subtract(tf.constant(1.0), tf.cast(tf.reshape(batch[:, 19], [self.batch_size, -1]), tf.float32))
+        not_done = tf.subtract(tf.constant(1.0), tf.cast(tf.reshape(batch[:, 19], [self.batch_size, -1]), tf.float32))
         suc_state = tf.reshape(batch[:, 11:19], [self.batch_size, -1])
 
         # TD-target
         # target = r + gamma * V(suc_state)
-        td_target_critic = tf.add(reward, tf.multiply(done, tf.cast(tf.multiply(self.gamma, self.target_critic(suc_state)), tf.float32)))
-        td_target_actor = tf.add(reward, tf.multiply(done, tf.cast(tf.multiply(self.gamma, self.critic(suc_state)), tf.float32)))
+        td_target_critic = tf.add(reward, tf.multiply(not_done, tf.cast(tf.multiply(self.gamma, self.target_critic(suc_state)), tf.float32)))
+        td_target_actor = tf.add(reward, tf.multiply(not_done, tf.cast(tf.multiply(self.gamma, self.critic(suc_state)), tf.float32)))
 
         if self.update_policy:
             # advantage
@@ -165,6 +171,9 @@ class ER_Memory:
 
     def remember(self, samples):
         self.memory.extend(samples)
+
+    def print_len(self):
+        print(len(self.memory))
 
     def get_random_batch(self):
         # chooses random indexes of the memory buffer and returns them as
